@@ -99,12 +99,14 @@ def _detect_compressor(fileobj):
 
     if first_bytes.startswith(_ZFILE_PREFIX):
         return "compat"
-    else:
-        for name, compressor in _COMPRESSORS.items():
-            if first_bytes.startswith(compressor.prefix):
-                return name
-
-    return "not-compressed"
+    return next(
+        (
+            name
+            for name, compressor in _COMPRESSORS.items()
+            if first_bytes.startswith(compressor.prefix)
+        ),
+        "not-compressed",
+    )
 
 
 def _buffered_read_file(fobj):
@@ -195,11 +197,11 @@ def _write_fileobject(filename, compress=("zlib", 3)):
     if compressmethod in _COMPRESSORS.keys():
         file_instance = _COMPRESSORS[compressmethod].compressor_file(
             filename, compresslevel=compresslevel)
-        return _buffered_write_file(file_instance)
     else:
         file_instance = _COMPRESSORS['zlib'].compressor_file(
             filename, compresslevel=compresslevel)
-        return _buffered_write_file(file_instance)
+
+    return _buffered_write_file(file_instance)
 
 
 # Utility functions/variables from numpy required for writing arrays.
@@ -239,13 +241,11 @@ def _read_bytes(fp, size, error_template="ran out of data"):
         # io files (default in python3) return None or raise on
         # would-block, python2 file will truncate, probably nothing can be
         # done about that.  note that regular files can't be non-blocking
-        try:
+        with contextlib.suppress(io.BlockingIOError):
             r = fp.read(size - len(data))
             data += r
             if len(r) == 0 or len(data) == size:
                 break
-        except io.BlockingIOError:
-            pass
     if len(data) != size:
         msg = "EOF: reading %s, expected %d bytes got %d"
         raise ValueError(msg % (error_template, size, len(data)))

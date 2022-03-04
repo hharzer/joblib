@@ -489,7 +489,7 @@ def test_memmapping_temp_folder_thread_safety():
 
     def concurrent_get_filename(array, temp_dirs):
         with Parallel(backend='loky', n_jobs=2, max_nbytes=10) as p:
-            for i in range(10):
+            for _ in range(10):
                 [filename] = p(
                     delayed(getattr)(array, 'filename') for _ in range(1)
                 )
@@ -1097,7 +1097,7 @@ def test_numpy_arrays_use_different_memory(mmap_mode):
 def test_weak_array_key_map():
 
     def assert_empty_after_gc_collect(container, retries=100):
-        for i in range(retries):
+        for _ in range(retries):
             if len(container) == 0:
                 return
             gc.collect()

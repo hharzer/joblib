@@ -60,7 +60,7 @@ Joblib worker traceback:
         return exception_type(report)
 
 
-_exception_mapping = dict()
+_exception_mapping = {}
 
 
 def _mk_exception(exception, name=None):
@@ -96,7 +96,7 @@ def _mk_exception(exception, name=None):
 
 
 def _mk_common_exceptions():
-    namespace = dict()
+    namespace = {}
     import builtins as _builtin_exceptions
     common_exceptions = filter(
         lambda x: x.endswith('Error'),

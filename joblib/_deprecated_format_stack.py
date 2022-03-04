@@ -49,14 +49,10 @@ def safe_repr(value):
             raise
         except:
             try:
-                # all still in an except block so we catch
-                # getattr raising
-                name = getattr(value, '__name__', None)
-                if name:
+                if name := getattr(value, '__name__', None):
                     # ick, recursion
                     return safe_repr(name)
-                klass = getattr(value, '__class__', None)
-                if klass:
+                if klass := getattr(value, '__class__', None):
                     return '%s instance' % safe_repr(klass)
             except KeyboardInterrupt:
                 raise
@@ -336,7 +332,7 @@ def format_exc(etype, evalue, etb, context=5, tb_offset=0):
         pass
 
     # Header with the exception type, python version, and date
-    pyver = 'Python ' + sys.version.split()[0] + ': ' + sys.executable
+    pyver = f'Python {sys.version.split()[0]}: {sys.executable}'
     date = time.ctime(time.time())
     pid = 'PID: %i' % os.getpid()
 
@@ -366,10 +362,9 @@ def format_outer_frames(context=5, stack_start=None, stack_end=None,
                         ignore_ipython=True):
     LNUM_POS, LINES_POS, INDEX_POS = 2, 4, 5
     records = inspect.getouterframes(inspect.currentframe())
-    output = list()
+    output = []
 
-    for i, (frame, filename, line_no, func_name, lines, index) \
-                                                in enumerate(records):
+    for i, (frame, filename, line_no, func_name, lines, index) in enumerate(records):
         # Look inside the frame's globals dictionary for __file__, which should
         # be better.
         better_fn = frame.f_globals.get('__file__', None)
@@ -379,12 +374,12 @@ def format_outer_frames(context=5, stack_start=None, stack_end=None,
             # import.
             filename = better_fn
             if filename.endswith('.pyc'):
-                filename = filename[:-4] + '.py'
-        if ignore_ipython:
-            # Hack to avoid printing the internals of IPython
-            if (os.path.basename(filename) in ('iplib.py', 'py3compat.py')
-                        and func_name in ('execfile', 'safe_execfile', 'runcode')):
-                break
+                filename = f'{filename[:-4]}.py'
+        if ignore_ipython and (
+            os.path.basename(filename) in ('iplib.py', 'py3compat.py')
+            and func_name in ('execfile', 'safe_execfile', 'runcode')
+        ):
+            break
         maybe_start = line_no - 1 - context // 2
         start = max(maybe_start, 0)
         end = start + context

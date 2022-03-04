@@ -73,10 +73,7 @@ class Hasher(Pickler):
         if isinstance(obj, (types.MethodType, type({}.pop))):
             # the Pickler cannot pickle instance methods; here we decompose
             # them into components that make them uniquely identifiable
-            if hasattr(obj, '__func__'):
-                func_name = obj.__func__.__name__
-            else:
-                func_name = obj.__name__
+            func_name = obj.__func__.__name__ if hasattr(obj, '__func__') else obj.__name__
             inst = obj.__self__
             if type(inst) == type(pickle):
                 obj = _MyHash(func_name, inst.__name__)
@@ -170,10 +167,7 @@ class NumpyHasher(Hasher):
         # delayed import of numpy, to avoid tight coupling
         import numpy as np
         self.np = np
-        if hasattr(np, 'getbuffer'):
-            self._getbuffer = np.getbuffer
-        else:
-            self._getbuffer = memoryview
+        self._getbuffer = np.getbuffer if hasattr(np, 'getbuffer') else memoryview
 
     def save(self, obj):
         """ Subclass the save method, to hash ndarray subclass, rather
@@ -183,20 +177,18 @@ class NumpyHasher(Hasher):
         if isinstance(obj, self.np.ndarray) and not obj.dtype.hasobject:
             # Compute a hash of the object
             # The update function of the hash requires a c_contiguous buffer.
-            if obj.shape == ():
+            if (
+                obj.shape == ()
+                or not obj.flags.c_contiguous
+                and not obj.flags.f_contiguous
+            ):
                 # 0d arrays need to be flattened because viewing them as bytes
                 # raises a ValueError exception.
                 obj_c_contiguous = obj.flatten()
             elif obj.flags.c_contiguous:
                 obj_c_contiguous = obj
-            elif obj.flags.f_contiguous:
-                obj_c_contiguous = obj.T
             else:
-                # Cater for non-single-segment arrays: this creates a
-                # copy, and thus alleviates this issue.
-                # XXX: There might be a more efficient way of doing this
-                obj_c_contiguous = obj.flatten()
-
+                obj_c_contiguous = obj.T
             # memoryview is not supported for some dtypes, e.g. datetime64, see
             # https://github.com/numpy/numpy/issues/4983. The
             # workaround is to view the array as bytes before

@@ -118,10 +118,7 @@ class BZ2CompressorWrapper(CompressorWrapper):
     extension = '.bz2'
 
     def __init__(self):
-        if bz2 is not None:
-            self.fileobj_factory = bz2.BZ2File
-        else:
-            self.fileobj_factory = None
+        self.fileobj_factory = bz2.BZ2File if bz2 is not None else None
 
     def _check_versions(self):
         if bz2 is None:
@@ -190,10 +187,7 @@ class LZ4CompressorWrapper(CompressorWrapper):
     extension = '.lz4'
 
     def __init__(self):
-        if lz4 is not None:
-            self.fileobj_factory = LZ4FrameFile
-        else:
-            self.fileobj_factory = None
+        self.fileobj_factory = LZ4FrameFile if lz4 is not None else None
 
     def _check_versions(self):
         if lz4 is None:

@@ -25,10 +25,7 @@ def _squeeze_time(t):
     stat files. This is needed to make results similar to timings under
     Unix, for tests
     """
-    if sys.platform.startswith('win'):
-        return max(0, t - .1)
-    else:
-        return t
+    return max(0, t - .1) if sys.platform.startswith('win') else t
 
 
 def format_time(t):
@@ -38,10 +35,7 @@ def format_time(t):
 
 def short_format_time(t):
     t = _squeeze_time(t)
-    if t > 60:
-        return "%4.1fmin" % (t / 60.)
-    else:
-        return " %5.1fs" % (t)
+    return "%4.1fmin" % (t / 60.) if t > 60 else " %5.1fs" % (t)
 
 
 def pformat(obj, indent=0, depth=3):
@@ -114,7 +108,7 @@ class PrintTime(object):
                 # Use a copy rather than a move, so that a process
                 # monitoring this file does not get lost.
                 try:
-                    shutil.copy(logfile, logfile + '.1')
+                    shutil.copy(logfile, f'{logfile}.1')
                 except:
                     "No reason failing here"
             try:

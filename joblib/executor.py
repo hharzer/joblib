@@ -33,7 +33,7 @@ class MemmappingExecutor(_ReusablePoolExecutor):
         # Check if we can reuse the executor here instead of deferring the test
         # to loky as the reducers are objects that changes at each call.
         executor_args = backend_args.copy()
-        executor_args.update(env if env else {})
+        executor_args.update(env or {})
         executor_args.update(dict(
             timeout=timeout, initializer=initializer, initargs=initargs))
         reuse = _executor_args is None or _executor_args == executor_args
@@ -98,11 +98,9 @@ class MemmappingExecutor(_ReusablePoolExecutor):
         # We cache this property because it is called late in the tests - at
         # this point, all context have been unregistered, and
         # resolve_temp_folder_name raises an error.
-        if getattr(self, '_cached_temp_folder', None) is not None:
-            return self._cached_temp_folder
-        else:
+        if getattr(self, '_cached_temp_folder', None) is None:
             self._cached_temp_folder = self._temp_folder_manager.resolve_temp_folder_name()  # noqa
-            return self._cached_temp_folder
+        return self._cached_temp_folder
 
 
 class _TestingMemmappingExecutor(MemmappingExecutor):

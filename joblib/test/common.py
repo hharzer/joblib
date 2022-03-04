@@ -62,7 +62,7 @@ except ImportError:
 # triggers an infinite wait on a pipe by the master process for one of its
 # failed workers
 
-_KILLER_THREADS = dict()
+_KILLER_THREADS = {}
 
 
 def setup_autokill(module_name, timeout=30):

@@ -112,10 +112,7 @@ def get_func_name(func, resolv_alias=True, win_characters=True):
         try:
             module = inspect.getmodule(func)
         except TypeError:
-            if hasattr(func, '__class__'):
-                module = func.__class__.__module__
-            else:
-                module = 'unknown'
+            module = func.__class__.__module__ if hasattr(func, '__class__') else 'unknown'
     if module is None:
         # Happens in doctests, eg
         module = ''
@@ -152,7 +149,7 @@ def get_func_name(func, resolv_alias=True, win_characters=True):
             filename = '-'.join(parts)
             if filename.endswith('.py'):
                 filename = filename[:-3]
-            module = module + '-' + filename
+            module = f'{module}-{filename}'
     module = module.split('.')
     if hasattr(func, 'func_name'):
         name = func.func_name
@@ -161,16 +158,16 @@ def get_func_name(func, resolv_alias=True, win_characters=True):
     else:
         name = 'unknown'
     # Hack to detect functions not defined at the module-level
-    if resolv_alias:
-        # TODO: Maybe add a warning here?
-        if hasattr(func, 'func_globals') and name in func.func_globals:
-            if not func.func_globals[name] is func:
-                name = '%s-alias' % name
-    if inspect.ismethod(func):
-        # We need to add the name of the class
-        if hasattr(func, 'im_class'):
-            klass = func.im_class
-            module.append(klass.__name__)
+    if (
+        resolv_alias
+        and hasattr(func, 'func_globals')
+        and name in func.func_globals
+        and func.func_globals[name] is not func
+    ):
+        name = '%s-alias' % name
+    if inspect.ismethod(func) and hasattr(func, 'im_class'):
+        klass = func.im_class
+        module.append(klass.__name__)
     if os.name == 'nt' and win_characters:
         # Windows can't encode certain characters in filenames
         name = _clean_win_chars(name)
@@ -259,7 +256,7 @@ def filter_args(func, ignore_lst, args=(), kwargs=dict()):
     # as on ndarrays.
 
     _, name = get_func_name(func, resolv_alias=False)
-    arg_dict = dict()
+    arg_dict = {}
     arg_position = -1
     for arg_position, arg_name in enumerate(arg_names):
         if arg_position < len(args):
@@ -292,7 +289,7 @@ def filter_args(func, ignore_lst, args=(), kwargs=dict()):
                            _function_called_str(name, args, kwargs))
                     ) from e
 
-    varkwargs = dict()
+    varkwargs = {}
     for arg_name, arg_value in sorted(kwargs.items()):
         if arg_name in arg_dict:
             arg_dict[arg_name] = arg_value
@@ -332,13 +329,12 @@ def _format_arg(arg):
 def format_signature(func, *args, **kwargs):
     # XXX: Should this use inspect.formatargvalues/formatargspec?
     module, name = get_func_name(func)
-    module = [m for m in module if m]
-    if module:
+    if module := [m for m in module if m]:
         module.append(name)
         module_path = '.'.join(module)
     else:
         module_path = name
-    arg_str = list()
+    arg_str = []
     previous_length = 0
     for arg in args:
         formatted_arg = _format_arg(arg)
@@ -358,8 +354,7 @@ def format_call(func, args, kwargs, object_name="Memory"):
         call with the given arguments.
     """
     path, signature = format_signature(func, *args, **kwargs)
-    msg = '%s\n[%s] Calling %s...\n%s' % (80 * '_', object_name,
+    return '%s\n[%s] Calling %s...\n%s' % (80 * '_', object_name,
                                           path, signature)
-    return msg
     # XXX: Not using logging framework
     # self.debug(msg)

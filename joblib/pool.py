@@ -118,10 +118,7 @@ class CustomizablePicklingQueue(object):
         self._reducers = reducers
         self._reader, self._writer = context.Pipe(duplex=False)
         self._rlock = context.Lock()
-        if sys.platform == 'win32':
-            self._wlock = None
-        else:
-            self._wlock = context.Lock()
+        self._wlock = None if sys.platform == 'win32' else context.Lock()
         self._make_methods()
 
     def __getstate__(self):
@@ -195,9 +192,9 @@ class PicklingPool(Pool):
     def __init__(self, processes=None, forward_reducers=None,
                  backward_reducers=None, **kwargs):
         if forward_reducers is None:
-            forward_reducers = dict()
+            forward_reducers = {}
         if backward_reducers is None:
-            backward_reducers = dict()
+            backward_reducers = {}
         self._forward_reducers = forward_reducers
         self._backward_reducers = backward_reducers
         poolargs = dict(processes=processes)
@@ -345,8 +342,6 @@ class MemmappingPool(PicklingPool):
         # We cache this property because it is called late in the tests - at
         # this point, all context have been unregistered, and
         # resolve_temp_folder_name raises an error.
-        if getattr(self, '_cached_temp_folder', None) is not None:
-            return self._cached_temp_folder
-        else:
+        if getattr(self, '_cached_temp_folder', None) is None:
             self._cached_temp_folder = self._temp_folder_manager.resolve_temp_folder_name()  # noqa
-            return self._cached_temp_folder
+        return self._cached_temp_folder

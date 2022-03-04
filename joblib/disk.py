@@ -104,33 +104,33 @@ def rm_subdirs(path, onerror=None):
 
 def delete_folder(folder_path, onerror=None, allow_non_empty=True):
     """Utility function to cleanup a temporary folder if it still exists."""
-    if os.path.isdir(folder_path):
-        if onerror is not None:
-            shutil.rmtree(folder_path, False, onerror)
-        else:
-            # allow the rmtree to fail once, wait and re-try.
-            # if the error is raised again, fail
-            err_count = 0
-            while True:
-                files = os.listdir(folder_path)
-                try:
-                    if len(files) == 0 or allow_non_empty:
-                        shutil.rmtree(
-                            folder_path, ignore_errors=False, onerror=None
-                        )
-                        util.debug(
-                            "Successfully deleted {}".format(folder_path))
-                        break
-                    else:
-                        raise OSError(
-                            "Expected empty folder {} but got {} "
-                            "files.".format(folder_path, len(files))
-                        )
-                except (OSError, WindowsError):
-                    err_count += 1
-                    if err_count > RM_SUBDIRS_N_RETRY:
-                        # the folder cannot be deleted right now. It maybe
-                        # because some temporary files have not been deleted
-                        # yet.
-                        raise
-                time.sleep(RM_SUBDIRS_RETRY_TIME)
+    if not os.path.isdir(folder_path):
+        return
+    if onerror is not None:
+        shutil.rmtree(folder_path, False, onerror)
+    else:
+        # allow the rmtree to fail once, wait and re-try.
+        # if the error is raised again, fail
+        err_count = 0
+        while True:
+            files = os.listdir(folder_path)
+            try:
+                if len(files) != 0 and not allow_non_empty:
+                    raise OSError(
+                        "Expected empty folder {} but got {} "
+                        "files.".format(folder_path, len(files))
+                    )
+                shutil.rmtree(
+                    folder_path, ignore_errors=False, onerror=None
+                )
+                util.debug(
+                    "Successfully deleted {}".format(folder_path))
+                break
+            except (OSError, WindowsError):
+                err_count += 1
+                if err_count > RM_SUBDIRS_N_RETRY:
+                    # the folder cannot be deleted right now. It maybe
+                    # because some temporary files have not been deleted
+                    # yet.
+                    raise
+            time.sleep(RM_SUBDIRS_RETRY_TIME)

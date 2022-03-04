@@ -2,6 +2,7 @@
 Test the parallel module.
 """
 
+
 # Author: Gael Varoquaux <gael dot varoquaux at normalesup dot org>
 # Copyright (c) 2010-2011 Gael Varoquaux
 # License: BSD Style, 3 clauses.
@@ -72,10 +73,7 @@ from joblib.my_exceptions import WorkerInterrupt
 ALL_VALID_BACKENDS = [None] + sorted(BACKENDS.keys())
 # Add instances of backend classes deriving from ParallelBackendBase
 ALL_VALID_BACKENDS += [BACKENDS[backend_str]() for backend_str in BACKENDS]
-if mp is None:
-    PROCESS_BACKENDS = []
-else:
-    PROCESS_BACKENDS = ['multiprocessing', 'loky']
+PROCESS_BACKENDS = [] if mp is None else ['multiprocessing', 'loky']
 PARALLEL_BACKENDS = PROCESS_BACKENDS + ['threading']
 
 if hasattr(mp, 'get_context'):
@@ -192,7 +190,7 @@ def test_main_thread_renamed_no_warning(backend, monkeypatch):
     # The multiprocessing backend will raise a warning when detecting that is
     # started from the non-main thread. Let's check that there is no false
     # positive because of the name change.
-    assert len(warninfo) == 0
+    assert not warninfo
 
 
 def _assert_warning_nested(backend, inner_n_jobs, expected):
@@ -202,12 +200,14 @@ def _assert_warning_nested(backend, inner_n_jobs, expected):
     warnings = [w.message for w in records]
     if expected:
         # with threading, we might see more that one records
-        if warnings:
-            return 'backed parallel loops cannot' in warnings[0].args[0]
-        return False
-    else:
-        assert not warnings
-        return True
+        return (
+            'backed parallel loops cannot' in warnings[0].args[0]
+            if warnings
+            else False
+        )
+
+    assert not warnings
+    return True
 
 
 @with_multiprocessing
@@ -346,8 +346,14 @@ def test_parallel_pickling():
 @parametrize('backend', PARALLEL_BACKENDS)
 def test_parallel_timeout_success(backend):
     # Check that timeout isn't thrown when function is fast enough
-    assert len(Parallel(n_jobs=2, backend=backend, timeout=10)(
-        delayed(sleep)(0.001) for x in range(10))) == 10
+    assert (
+        len(
+            Parallel(n_jobs=2, backend=backend, timeout=10)(
+                delayed(sleep)(0.001) for _ in range(10)
+            )
+        )
+        == 10
+    )
 
 
 @with_multiprocessing
@@ -356,7 +362,8 @@ def test_parallel_timeout_fail(backend):
     # Check that timeout properly fails when function is too slow
     with raises(TimeoutError):
         Parallel(n_jobs=2, backend=backend, timeout=0.01)(
-            delayed(sleep)(10) for x in range(10))
+            delayed(sleep)(10) for _ in range(10)
+        )
 
 
 @with_multiprocessing
@@ -922,8 +929,7 @@ def test_no_blas_crash_or_freeze_with_subprocesses(backend):
 
     # check that the internal BLAS thread-pool is not in an inconsistent state
     # in the worker processes managed by multiprocessing
-    Parallel(n_jobs=2, backend=backend)(
-        delayed(np.dot)(a, a.T) for i in range(2))
+    Parallel(n_jobs=2, backend=backend)(delayed(np.dot)(a, a.T) for _ in range(2))
 
 
 UNPICKLABLE_CALLABLE_SCRIPT_TEMPLATE_NO_MAIN = """\
@@ -1252,13 +1258,13 @@ def test_backend_batch_statistics_reset(backend):
     task_time = 2. / n_inputs
 
     p = Parallel(verbose=10, n_jobs=n_jobs, backend=backend)
-    p(delayed(time.sleep)(task_time) for i in range(n_inputs))
+    p(delayed(time.sleep)(task_time) for _ in range(n_inputs))
     assert (p._backend._effective_batch_size ==
             p._backend._DEFAULT_EFFECTIVE_BATCH_SIZE)
     assert (p._backend._smoothed_batch_duration ==
             p._backend._DEFAULT_SMOOTHED_BATCH_DURATION)
 
-    p(delayed(time.sleep)(task_time) for i in range(n_inputs))
+    p(delayed(time.sleep)(task_time) for _ in range(n_inputs))
     assert (p._backend._effective_batch_size ==
             p._backend._DEFAULT_EFFECTIVE_BATCH_SIZE)
     assert (p._backend._smoothed_batch_duration ==
@@ -1412,8 +1418,11 @@ def _recursive_backend_info(limit=3, **kwargs):
         this_level = [(type(p._backend).__name__, p._backend.nesting_level)]
         if limit == 0:
             return this_level
-        results = p(delayed(_recursive_backend_info)(limit=limit - 1, **kwargs)
-                    for i in range(1))
+        results = p(
+            delayed(_recursive_backend_info)(limit=limit - 1, **kwargs)
+            for _ in range(1)
+        )
+
         return this_level + results[0]
 
 
@@ -1430,7 +1439,7 @@ def test_nested_parallelism_limit(backend):
         second_level_backend_type = 'ThreadingBackend'
         max_level = 2
 
-    top_level_backend_type = backend.title() + 'Backend'
+    top_level_backend_type = f'{backend.title()}Backend'
     expected_types_and_levels = [
         (top_level_backend_type, 0),
         (second_level_backend_type, 1),
@@ -1447,7 +1456,7 @@ def test_nested_parallelism_with_dask():
 
     # 10 MB of data as argument to trigger implicit scattering
     data = np.ones(int(1e7), dtype=np.uint8)
-    for i in range(2):
+    for _ in range(2):
         with parallel_backend('dask'):
             backend_types_and_levels = _recursive_backend_info(data=data)
         assert len(backend_types_and_levels) == 4
@@ -1464,7 +1473,7 @@ def test_nested_parallelism_with_dask():
 
 def _recursive_parallel(nesting_limit=None):
     """A horrible function that does recursive parallel calls"""
-    return Parallel()(delayed(_recursive_parallel)() for i in range(2))
+    return Parallel()(delayed(_recursive_parallel)() for _ in range(2))
 
 
 @parametrize('backend',
@@ -1494,11 +1503,19 @@ def test_thread_bomb_mitigation(backend):
 
 
 def _run_parallel_sum():
-    env_vars = {}
-    for var in ['OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS',
-                'VECLIB_MAXIMUM_THREADS', 'NUMEXPR_NUM_THREADS',
-                'NUMBA_NUM_THREADS', 'ENABLE_IPC']:
-        env_vars[var] = os.environ.get(var)
+    env_vars = {
+        var: os.environ.get(var)
+        for var in [
+            'OMP_NUM_THREADS',
+            'OPENBLAS_NUM_THREADS',
+            'MKL_NUM_THREADS',
+            'VECLIB_MAXIMUM_THREADS',
+            'NUMEXPR_NUM_THREADS',
+            'NUMBA_NUM_THREADS',
+            'ENABLE_IPC',
+        ]
+    }
+
     return env_vars, parallel_sum(100)
 
 
@@ -1622,7 +1639,9 @@ def test_threadpool_limitation_in_child(n_jobs):
         pytest.skip(msg="Need a version of numpy linked to BLAS")
 
     workers_threadpool_infos = Parallel(n_jobs=n_jobs)(
-        delayed(_check_numpy_threadpool_limits)() for i in range(2))
+        delayed(_check_numpy_threadpool_limits)() for _ in range(2)
+    )
+
 
     n_jobs = effective_n_jobs(n_jobs)
     expected_child_num_threads = max(cpu_count() // n_jobs, 1)
@@ -1646,7 +1665,9 @@ def test_threadpool_limitation_in_child_context(n_jobs, inner_max_num_threads):
 
     with parallel_backend('loky', inner_max_num_threads=inner_max_num_threads):
         workers_threadpool_infos = Parallel(n_jobs=n_jobs)(
-            delayed(_check_numpy_threadpool_limits)() for i in range(2))
+            delayed(_check_numpy_threadpool_limits)() for _ in range(2)
+        )
+
 
     n_jobs = effective_n_jobs(n_jobs)
     if inner_max_num_threads is None:
@@ -1712,7 +1733,7 @@ def test_loky_reuse_workers(n_jobs):
 
     def parallel_call(n_jobs):
         x = range(10)
-        Parallel(n_jobs=n_jobs)(delayed(sum)(x) for i in range(10))
+        Parallel(n_jobs=n_jobs)(delayed(sum)(x) for _ in range(10))
 
     # Run a parallel loop and get the workers used for computations
     parallel_call(n_jobs)

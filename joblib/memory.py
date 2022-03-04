@@ -220,10 +220,7 @@ class MemorizedResult(Logger):
                  mmap_mode=None, verbose=0, timestamp=None, metadata=None):
         Logger.__init__(self)
         self.func_id = _build_func_identifier(func)
-        if isinstance(func, str):
-            self.func = func
-        else:
-            self.func = self.func_id
+        self.func = func if isinstance(func, str) else self.func_id
         self.args_id = args_id
         self.store_backend = _store_backend_factory(backend, location,
                                                     verbose=verbose)
@@ -316,7 +313,7 @@ class NotMemorizedResult(object):
                     .format(class_name=self.__class__.__name__,
                             value=pformat(self.value)))
         else:
-            return self.__class__.__name__ + ' with no value'
+            return f'{self.__class__.__name__} with no value'
 
     # __getstate__ and __setstate__ are required because of __slots__
     def __getstate__(self):
@@ -713,7 +710,7 @@ class MemorizedFunc(Logger):
         _, func_name = get_func_name(self.func, resolv_alias=False,
                                      win_characters=False)
         if old_first_line == first_line == -1 or func_name == '<lambda>':
-            if not first_line == -1:
+            if first_line != -1:
                 func_description = ("{0} ({1}:{2})"
                                     .format(func_name, source_file,
                                             first_line))
@@ -727,7 +724,7 @@ class MemorizedFunc(Logger):
         # same than the code store, we have a collision: the code in the
         # file has not changed, but the name we have is pointing to a new
         # code block.
-        if not old_first_line == first_line and source_file is not None:
+        if old_first_line != first_line and source_file is not None:
             possible_collision = False
             if os.path.exists(source_file):
                 _, func_name = get_func_name(self.func, resolv_alias=False)
@@ -810,7 +807,7 @@ class MemorizedFunc(Logger):
         argument_dict = filter_args(self.func, self.ignore,
                                     args, kwargs)
 
-        input_repr = dict((k, repr(v)) for k, v in argument_dict.items())
+        input_repr = {k: repr(v) for k, v in argument_dict.items()}
         # This can fail due to race-conditions with multiple
         # concurrent joblibs removing the file or the directory
         metadata = {"duration": duration, "input_args": input_repr}

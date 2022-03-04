@@ -71,19 +71,9 @@ def timeit(func, *args, **kwargs):
         kill_disk_cache()
         t0 = time.time()
         out = func(*args, **kwargs)
-        if 1:
-            # Just time the function
-            t1 = time.time()
-            times.append(t1 - t0)
-        else:
-            # Compute a hash of the output, to estimate the time
-            # necessary to access the elements: this is a better
-            # estimate of the time to load with me mmapping.
-            joblib.hash(out)
-            t1 = time.time()
-            joblib.hash(out)
-            t2 = time.time()
-            times.append(t2 - t0 - 2 * (t2 - t1))
+        # Just time the function
+        t1 = time.time()
+        times.append(t1 - t0)
     times.sort()
     return np.mean(times[1:-1]) if tries > 1 else t1 - t0, out
 

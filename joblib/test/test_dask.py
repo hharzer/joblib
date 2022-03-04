@@ -28,11 +28,10 @@ def slow_raise_value_error(condition, duration=0.05):
 
 def count_events(event_name, client):
     worker_events = client.run(lambda dask_worker: dask_worker.log)
-    event_counts = {}
-    for w, events in worker_events.items():
-        event_counts[w] = len([event for event in list(events)
-                               if event[1] == event_name])
-    return event_counts
+    return {
+        w: len([event for event in list(events) if event[1] == event_name])
+        for w, events in worker_events.items()
+    }
 
 
 def test_simple(loop):
@@ -82,7 +81,7 @@ def test_dont_assume_function_purity(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as client:  # noqa: F841
             with parallel_backend('dask') as (ba, _):
-                x, y = Parallel()(delayed(random2)() for i in range(2))
+                x, y = Parallel()(delayed(random2)() for _ in range(2))
                 assert x != y
 
 

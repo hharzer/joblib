@@ -22,11 +22,12 @@ def bufferize(f, buf):
     """Bufferize a fileobject using buf."""
     if buf is None:
         return f
-    else:
-        if (buf.__name__ == io.BufferedWriter.__name__ or
-                buf.__name__ == io.BufferedReader.__name__):
-            return buf(f, buffer_size=10 * 1024 ** 2)
-        return buf(f)
+    if buf.__name__ in [
+        io.BufferedWriter.__name__,
+        io.BufferedReader.__name__,
+    ]:
+        return buf(f, buffer_size=10 * 1024 ** 2)
+    return buf(f)
 
 
 def _load(unpickler, fname, f):
@@ -210,12 +211,16 @@ arr = np.random.normal(size=(ARRAY_SIZE))
 arr[::2] = 1
 
 # Objects used for testing
-objects = OrderedDict([
-    ("dict", dict((i, str(i)) for i in range(DICT_SIZE))),
-    ("list", [i for i in range(DICT_SIZE)]),
-    ("array semi-random", arr),
-    ("array random", np.random.normal(size=(ARRAY_SIZE))),
-    ("array ones", np.ones((ARRAY_SIZE))), ])
+objects = OrderedDict(
+    [
+        ("dict", {i: str(i) for i in range(DICT_SIZE)}),
+        ("list", list(range(DICT_SIZE))),
+        ("array semi-random", arr),
+        ("array random", np.random.normal(size=(ARRAY_SIZE))),
+        ("array ones", np.ones((ARRAY_SIZE))),
+    ]
+)
+
 
 #  We test 3 different picklers
 picklers = OrderedDict([

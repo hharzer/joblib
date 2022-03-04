@@ -288,15 +288,9 @@ class AutoBatchingMixin(object):
         batch_duration = self._smoothed_batch_duration
         if (batch_duration > 0 and
                 batch_duration < self.MIN_IDEAL_BATCH_DURATION):
-            # The current batch size is too small: the duration of the
-            # processing of a batch of task is not large enough to hide
-            # the scheduling overhead.
             ideal_batch_size = int(old_batch_size *
                                    self.MIN_IDEAL_BATCH_DURATION /
-                                   batch_duration)
-            # Multiply by two to limit oscilations between min and max.
-            ideal_batch_size *= 2
-
+                                   batch_duration) * 2
             # dont increase the batch size too fast to limit huge batch sizes
             # potentially leading to starving worker
             batch_size = min(2 * old_batch_size, ideal_batch_size)
