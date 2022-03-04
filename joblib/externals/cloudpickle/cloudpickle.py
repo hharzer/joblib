@@ -100,11 +100,7 @@ _DYNAMIC_CLASS_TRACKER_LOCK = threading.Lock()
 
 PYPY = platform.python_implementation() == "PyPy"
 
-builtin_code_type = None
-if PYPY:
-    # builtin-code objects only exist in pypy
-    builtin_code_type = type(float.__new__.__code__)
-
+builtin_code_type = type(float.__new__.__code__) if PYPY else None
 _extract_code_globals_cache = weakref.WeakKeyDictionary()
 
 
@@ -382,7 +378,7 @@ def _find_imported_submodules(code, top_level_dependencies):
         if (isinstance(x, types.ModuleType) and
                 hasattr(x, '__package__') and x.__package__):
             # check if the package has any currently loaded sub-imports
-            prefix = x.__name__ + '.'
+            prefix = f'{x.__name__}.'
             # A concurrent thread could mutate sys.modules,
             # make sure we iterate over a copy to avoid exceptions
             for name in list(sys.modules):
@@ -500,19 +496,13 @@ HAVE_ARGUMENT = dis.HAVE_ARGUMENT
 EXTENDED_ARG = dis.EXTENDED_ARG
 
 
-_BUILTIN_TYPE_NAMES = {}
-for k, v in types.__dict__.items():
-    if type(v) is type:
-        _BUILTIN_TYPE_NAMES[v] = k
+_BUILTIN_TYPE_NAMES = {
+    v: k for k, v in types.__dict__.items() if type(v) is type
+}
 
 
 def _builtin_type(name):
-    if name == "ClassType":  # pragma: no cover
-        # Backward compat to load pickle files generated with cloudpickle
-        # < 1.3 even if loading pickle files from older versions is not
-        # officially supported.
-        return type
-    return getattr(types, name)
+    return type if name == "ClassType" else getattr(types, name)
 
 
 def _walk_global_ops(code):
@@ -627,10 +617,7 @@ def parametrized_type_hint_getinitargs(obj):
             args = obj.__args__
             result = obj.__result__
             if args != Ellipsis:
-                if isinstance(args, tuple):
-                    args = list(args)
-                else:
-                    args = [args]
+                args = list(args) if isinstance(args, tuple) else [args]
         else:
             (*args, result) = obj.__args__
             if len(args) == 1 and args[0] is Ellipsis:
@@ -794,11 +781,6 @@ def _fill_function(*args):
 
 
 def _make_empty_cell():
-    if False:
-        # trick the compiler into creating an empty cell in our lambda
-        cell = None
-        raise AssertionError('this route should not be executed')
-
     return (lambda: cell).__closure__[0]
 
 
@@ -934,11 +916,12 @@ def _typevar_reduce(obj):
     # are not using the _should_pickle_by_reference directly
     module_and_name = _lookup_module_and_qualname(obj, name=obj.__name__)
 
-    if module_and_name is None:
+    if (
+        module_and_name is None
+        or module_and_name is not None
+        and _is_registered_pickle_by_value(module_and_name[0])
+    ):
         return (_make_typevar, _decompose_typevar(obj))
-    elif _is_registered_pickle_by_value(module_and_name[0]):
-        return (_make_typevar, _decompose_typevar(obj))
-
     return (getattr, module_and_name)
 
 
@@ -963,11 +946,8 @@ def _make_dict_values(obj, is_ordered=False):
     if is_ordered:
         return OrderedDict((i, _) for i, _ in enumerate(obj)).values()
     else:
-        return {i: _ for i, _ in enumerate(obj)}.values()
+        return dict(enumerate(obj)).values()
 
 
 def _make_dict_items(obj, is_ordered=False):
-    if is_ordered:
-        return OrderedDict(obj).items()
-    else:
-        return obj.items()
+    return OrderedDict(obj).items() if is_ordered else obj.items()

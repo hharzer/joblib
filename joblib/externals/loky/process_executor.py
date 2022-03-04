@@ -456,14 +456,11 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 with worker_exit_lock:
                     mp.util.debug('Exit due to memory leak')
                     return
-        else:
-            # if psutil is not installed, trigger gc.collect events
-            # regularly to limit potential memory leaks due to reference cycles
-            if (_last_memory_leak_check is None or
+        elif (_last_memory_leak_check is None or
                     (time() - _last_memory_leak_check >
                      _MEMORY_LEAK_CHECK_DELAY)):
-                gc.collect()
-                _last_memory_leak_check = time()
+            gc.collect()
+            _last_memory_leak_check = time()
 
 
 class _ExecutorManagerThread(threading.Thread):
@@ -877,7 +874,7 @@ def _check_max_depth(context):
             "MAX_DEPTH=1. It is not possible to increase this limit when "
             "using the 'fork' start method.")
 
-    if 0 < MAX_DEPTH and _CURRENT_DEPTH + 1 > MAX_DEPTH:
+    if MAX_DEPTH > 0 and _CURRENT_DEPTH + 1 > MAX_DEPTH:
         raise LokyRecursionError(
             "Could not spawn extra nested processes at depth superior to "
             f"MAX_DEPTH={MAX_DEPTH}. If this is intendend, you can change "
@@ -953,9 +950,9 @@ class ProcessPoolExecutor(Executor):
 
         if max_workers is None:
             self._max_workers = cpu_count()
+        elif max_workers <= 0:
+            raise ValueError("max_workers must be greater than 0")
         else:
-            if max_workers <= 0:
-                raise ValueError("max_workers must be greater than 0")
             self._max_workers = max_workers
 
         if context is None:
@@ -1029,31 +1026,32 @@ class ProcessPoolExecutor(Executor):
                                          ctx=self._context)
 
     def _start_executor_manager_thread(self):
-        if self._executor_manager_thread is None:
-            mp.util.debug('_start_executor_manager_thread called')
+        if self._executor_manager_thread is not None:
+            return
+        mp.util.debug('_start_executor_manager_thread called')
 
-            # Start the processes so that their sentinels are known.
-            self._executor_manager_thread = _ExecutorManagerThread(self)
-            self._executor_manager_thread.start()
+        # Start the processes so that their sentinels are known.
+        self._executor_manager_thread = _ExecutorManagerThread(self)
+        self._executor_manager_thread.start()
 
-            # register this executor in a mechanism that ensures it will wakeup
-            # when the interpreter is exiting.
-            _threads_wakeups[self._executor_manager_thread] = \
-                (self._shutdown_lock,
-                 self._executor_manager_thread_wakeup)
+        # register this executor in a mechanism that ensures it will wakeup
+        # when the interpreter is exiting.
+        _threads_wakeups[self._executor_manager_thread] = \
+            (self._shutdown_lock,
+             self._executor_manager_thread_wakeup)
 
-            global process_pool_executor_at_exit
-            if process_pool_executor_at_exit is None:
-                # Ensure that the _python_exit function will be called before
-                # the multiprocessing.Queue._close finalizers which have an
-                # exitpriority of 10.
+        global process_pool_executor_at_exit
+        if process_pool_executor_at_exit is None:
+            # Ensure that the _python_exit function will be called before
+            # the multiprocessing.Queue._close finalizers which have an
+            # exitpriority of 10.
 
-                if sys.version_info < (3, 9):
-                    process_pool_executor_at_exit = mp.util.Finalize(
-                        None, _python_exit, exitpriority=20)
-                else:
-                    process_pool_executor_at_exit = threading._register_atexit(
-                        _python_exit)
+            if sys.version_info < (3, 9):
+                process_pool_executor_at_exit = mp.util.Finalize(
+                    None, _python_exit, exitpriority=20)
+            else:
+                process_pool_executor_at_exit = threading._register_atexit(
+                    _python_exit)
 
     def _adjust_process_count(self):
         for _ in range(len(self._processes), self._max_workers):

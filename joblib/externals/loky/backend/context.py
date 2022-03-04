@@ -143,15 +143,13 @@ def _cpu_count_cgroup(os_cpu_count):
     if cpu_quota_us == "max":
         # No active Cgroup quota on a Cgroup-capable platform
         return os_cpu_count
-    else:
-        cpu_quota_us = int(cpu_quota_us)
-        cpu_period_us = int(cpu_period_us)
-        if cpu_quota_us > 0 and cpu_period_us > 0:
-            return math.ceil(cpu_quota_us / cpu_period_us)
-        else:  # pragma: no cover
-            # Setting a negative cpu_quota_us value is a valid way to disable
-            # cgroup CPU bandwith limits
-            return os_cpu_count
+    cpu_quota_us = int(cpu_quota_us)
+    cpu_period_us = int(cpu_period_us)
+    return (
+        math.ceil(cpu_quota_us / cpu_period_us)
+        if cpu_quota_us > 0 and cpu_period_us > 0
+        else os_cpu_count
+    )
 
 
 def _cpu_count_user(os_cpu_count):

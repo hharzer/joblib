@@ -67,9 +67,12 @@ def test_format_records():
         assert re.search(arrow_regex + r"_raise_exception\('a', 42\)",
                          formatted_records[0],
                          re.MULTILINE)
-        assert re.search(arrow_regex + r'helper\(a, b\)',
-                         formatted_records[1],
-                         re.MULTILINE)
+        assert re.search(
+            f'{arrow_regex}helper\\(a, b\\)',
+            formatted_records[1],
+            re.MULTILINE,
+        )
+
         assert "a = 'a'" in formatted_records[1]
         assert 'b = 42' in formatted_records[1]
         assert re.search(arrow_regex +
@@ -108,9 +111,7 @@ def test_format_records_file_with_less_lines_than_context(tmpdir):
         assert (nb_lines_formatted_records == len_header + len(code_lines))
         # Check exception stack
         arrow_regex = r'^-+>\s+\d+\s+'
-        assert re.search(arrow_regex + r'1/0',
-                         formatted_records[1],
-                         re.MULTILINE)
+        assert re.search(f'{arrow_regex}1/0', formatted_records[1], re.MULTILINE)
 
 
 @with_numpy

@@ -1,5 +1,6 @@
 """Test the numpy pickler as a replacement of the standard pickler."""
 
+
 import copy
 import os
 import random
@@ -40,18 +41,10 @@ from joblib.compressor import (_COMPRESSORS, _LZ4_PREFIX, CompressorWrapper,
                                LZ4_NOT_INSTALLED_ERROR, BinaryZlibFile)
 
 
-###############################################################################
-# Define a list of standard types.
-# Borrowed from dill, initial author: Micheal McKerns:
-# http://dev.danse.us/trac/pathos/browser/dill/dill_test2.py
-
-typelist = []
-
 # testing types
 _none = None
-typelist.append(_none)
 _type = type
-typelist.append(_type)
+typelist = [_none, _type]
 _bool = bool(1)
 typelist.append(_bool)
 _int = int(1)
@@ -134,7 +127,7 @@ def test_numpy_persistence(tmpdir, compress):
     rnd = np.random.RandomState(0)
     a = rnd.random_sample((10, 2))
     # We use 'a.T' to have a non C-contiguous array.
-    for index, obj in enumerate(((a,), (a.T,), (a, a), [a, a, a])):
+    for obj in ((a,), (a.T,), (a, a), [a, a, a]):
         filenames = numpy_pickle.dump(obj, filename, compress=compress)
 
         # All is cached in one file
@@ -153,9 +146,7 @@ def test_numpy_persistence(tmpdir, compress):
         np.testing.assert_array_equal(np.array(obj), np.array(obj_))
 
     # Now test with array subclasses
-    for obj in (np.matrix(np.zeros(10)),
-                np.memmap(filename + 'mmap',
-                          mode='w+', shape=4, dtype=np.float64)):
+    for obj in (np.matrix(np.zeros(10)), np.memmap(f'{filename}mmap', mode='w+', shape=4, dtype=np.float64)):
         filenames = numpy_pickle.dump(obj, filename, compress=compress)
         # All is cached in one file
         assert len(filenames) == 1
@@ -602,7 +593,7 @@ def test_joblib_compression_formats(tmpdir, compress, cmethod):
         # skipif fixture whose argument is True when lz4 is not installed
         pytest.skip("lz4 is not installed.")
 
-    dump_filename = filename + "." + cmethod
+    dump_filename = f'{filename}.{cmethod}'
     for obj in objects:
         numpy_pickle.dump(obj, dump_filename, compress=(cmethod, compress))
         # Verify the file contains the right magic number
@@ -1088,7 +1079,7 @@ def test_lz4_compression(tmpdir):
     assert numpy_pickle.load(fname) == data
 
     # Test that LZ4 is applied based on file extension
-    numpy_pickle.dump(data, fname + '.lz4')
+    numpy_pickle.dump(data, f'{fname}.lz4')
     with open(fname, 'rb') as f:
         assert f.read(len(_LZ4_PREFIX)) == _LZ4_PREFIX
     assert numpy_pickle.load(fname) == data
@@ -1105,7 +1096,7 @@ def test_lz4_compression_without_lz4(tmpdir):
     excinfo.match(msg)
 
     with raises(ValueError) as excinfo:
-        numpy_pickle.dump(data, fname + '.lz4')
+        numpy_pickle.dump(data, f'{fname}.lz4')
     excinfo.match(msg)
 
 

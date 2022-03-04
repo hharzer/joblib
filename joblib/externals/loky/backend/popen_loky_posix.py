@@ -70,9 +70,8 @@ class Popen:
 
     def wait(self, timeout=None):
         if self.returncode is None:
-            if timeout is not None:
-                if not wait([self.sentinel], timeout):
-                    return None
+            if timeout is not None and not wait([self.sentinel], timeout):
+                return None
             # This shouldn't block if wait() returned successfully.
             return self.poll(os.WNOHANG if timeout == 0.0 else 0)
         return self.returncode

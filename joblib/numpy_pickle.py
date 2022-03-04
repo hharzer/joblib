@@ -312,12 +312,10 @@ class NumpyPickler(Pickler):
         except io.UnsupportedOperation:
             kwargs = {'numpy_array_alignment_bytes': None}
 
-        wrapper = NumpyArrayWrapper(type(array),
+        return NumpyArrayWrapper(type(array),
                                     array.shape, order, array.dtype,
                                     allow_mmap=allow_mmap,
                                     **kwargs)
-
-        return wrapper
 
     def save(self, obj):
         """Subclass the Pickler `save` method.
@@ -329,30 +327,31 @@ class NumpyPickler(Pickler):
         after in the file. Warning: the file produced does not follow the
         pickle format. As such it can not be read with `pickle.load`.
         """
-        if self.np is not None and type(obj) in (self.np.ndarray,
-                                                 self.np.matrix,
-                                                 self.np.memmap):
-            if type(obj) is self.np.memmap:
-                # Pickling doesn't work with memmapped arrays
-                obj = self.np.asanyarray(obj)
+        if self.np is None or type(obj) not in (
+            self.np.ndarray,
+            self.np.matrix,
+            self.np.memmap,
+        ):
+            return Pickler.save(self, obj)
+        if type(obj) is self.np.memmap:
+            # Pickling doesn't work with memmapped arrays
+            obj = self.np.asanyarray(obj)
 
-            # The array wrapper is pickled instead of the real array.
-            wrapper = self._create_array_wrapper(obj)
-            Pickler.save(self, wrapper)
+        # The array wrapper is pickled instead of the real array.
+        wrapper = self._create_array_wrapper(obj)
+        Pickler.save(self, wrapper)
 
-            # A framer was introduced with pickle protocol 4 and we want to
-            # ensure the wrapper object is written before the numpy array
-            # buffer in the pickle file.
-            # See https://www.python.org/dev/peps/pep-3154/#framing to get
-            # more information on the framer behavior.
-            if self.proto >= 4:
-                self.framer.commit_frame(force=True)
+        # A framer was introduced with pickle protocol 4 and we want to
+        # ensure the wrapper object is written before the numpy array
+        # buffer in the pickle file.
+        # See https://www.python.org/dev/peps/pep-3154/#framing to get
+        # more information on the framer behavior.
+        if self.proto >= 4:
+            self.framer.commit_frame(force=True)
 
-            # And then array bytes are written right after the wrapper.
-            wrapper.write_array(obj, self)
-            return
-
-        return Pickler.save(self, obj)
+        # And then array bytes are written right after the wrapper.
+        wrapper.write_array(obj, self)
+        return
 
 
 class NumpyUnpickler(Unpickler):

@@ -130,6 +130,11 @@ def test_memory_integration(tmpdir):
 def test_parallel_call_cached_function_defined_in_jupyter(
     tmpdir, call_before_reducing
 ):
+    ipython_cell_source = '''
+        def f(x):
+            return x
+        '''
+
     # Calling an interactively defined memory.cache()'d function inside a
     # Parallel call used to clear the existing cache related to the said
     # function (https://github.com/joblib/joblib/issues/1035)
@@ -146,11 +151,6 @@ def test_parallel_call_cached_function_defined_in_jupyter(
     # notebooks/ipython session -- we want to test this code, which requires
     # the emulation to be rigorous.
     for session_no in [0, 1]:
-        ipython_cell_source = '''
-        def f(x):
-            return x
-        '''
-
         ipython_cell_id = '<ipython-input-{}-000000000000>'.format(session_no)
 
         exec(
@@ -985,8 +985,7 @@ def test_memory_clear(tmpdir):
 
 
 def fast_func_with_complex_output():
-    complex_obj = ['a' * 1000] * 1000
-    return complex_obj
+    return ['a' * 1000] * 1000
 
 
 def fast_func_with_conditional_complex_output(complex_output=True):
@@ -1002,7 +1001,7 @@ def test_cached_function_race_condition_when_persisting_output(tmpdir, capfd):
     memory = Memory(location=tmpdir.strpath)
     func_cached = memory.cache(fast_func_with_complex_output)
 
-    Parallel(n_jobs=2)(delayed(func_cached)() for i in range(3))
+    Parallel(n_jobs=2)(delayed(func_cached)() for _ in range(3))
 
     stdout, stderr = capfd.readouterr()
 
@@ -1025,8 +1024,7 @@ def test_cached_function_race_condition_when_persisting_output_2(tmpdir,
     memory = Memory(location=tmpdir.strpath)
     func_cached = memory.cache(fast_func_with_conditional_complex_output)
 
-    Parallel(n_jobs=2)(delayed(func_cached)(True if i % 2 == 0 else False)
-                       for i in range(3))
+    Parallel(n_jobs=2)(delayed(func_cached)(i % 2 == 0) for i in range(3))
 
     stdout, stderr = capfd.readouterr()
 
@@ -1271,10 +1269,9 @@ def compare(left, right, ignored_attrs=None):
     left_vars = vars(left)
     right_vars = vars(right)
     assert set(left_vars.keys()) == set(right_vars.keys())
-    for attr in left_vars.keys():
-        if attr in ignored_attrs:
-            continue
-        assert left_vars[attr] == right_vars[attr]
+    for attr, value in left_vars.items():
+        if attr not in ignored_attrs:
+            assert value == right_vars[attr]
 
 
 @pytest.mark.parametrize('memory_kwargs',

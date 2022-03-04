@@ -91,11 +91,9 @@ class _WeakKeyDictionary:
 
 
 def _funcname(x):
-    try:
+    with contextlib.suppress(Exception):
         if isinstance(x, list):
             x = x[0][0]
-    except Exception:
-        pass
     return funcname(x)
 
 
@@ -103,10 +101,7 @@ def _make_tasks_summary(tasks):
     """Summarize of list of (func, args, kwargs) function calls"""
     unique_funcs = {func for func, args, kwargs in tasks}
 
-    if len(unique_funcs) == 1:
-        mixed = False
-    else:
-        mixed = True
+    mixed = len(unique_funcs) != 1
     return len(tasks), mixed, _funcname(tasks)
 
 
@@ -122,14 +117,13 @@ class Batch:
     def __call__(self, tasks=None):
         results = []
         with parallel_backend('dask'):
-            for func, args, kwargs in tasks:
-                results.append(func(*args, **kwargs))
+            results.extend(func(*args, **kwargs) for func, args, kwargs in tasks)
         return results
 
     def __repr__(self):
         descr = f"batch_of_{self._funcname}_{self._num_tasks}_calls"
         if self._mixed:
-            descr = "mixed_" + descr
+            descr = f"mixed_{descr}"
         return descr
 
 
@@ -273,34 +267,31 @@ class DaskDistributedBackend(AutoBatchingMixin, ParallelBackendBase):
 
                 f = self.data_futures.get(arg_id, None)
                 if f is None and call_data_futures is not None:
-                    try:
+                    with contextlib.suppress(KeyError):
                         f = await call_data_futures[arg]
-                    except KeyError:
-                        pass
-                    if f is None:
-                        if is_weakrefable(arg) and sizeof(arg) > 1e3:
-                            # Automatically scatter large objects to some of
-                            # the workers to avoid duplicated data transfers.
-                            # Rely on automated inter-worker data stealing if
-                            # more workers need to reuse this data
-                            # concurrently.
-                            # set hash=False - nested scatter calls (i.e
-                            # calling client.scatter inside a dask worker)
-                            # using hash=True often raise CancelledError,
-                            # see dask/distributed#3703
-                            _coro = self.client.scatter(
-                                arg,
-                                asynchronous=True,
-                                hash=False
-                            )
-                            # Centralize the scattering of identical arguments
-                            # between concurrent apply_async callbacks by
-                            # exposing the running coroutine in
-                            # call_data_futures before it completes.
-                            t = asyncio.Task(_coro)
-                            call_data_futures[arg] = t
+                    if f is None and is_weakrefable(arg) and sizeof(arg) > 1e3:
+                        # Automatically scatter large objects to some of
+                        # the workers to avoid duplicated data transfers.
+                        # Rely on automated inter-worker data stealing if
+                        # more workers need to reuse this data
+                        # concurrently.
+                        # set hash=False - nested scatter calls (i.e
+                        # calling client.scatter inside a dask worker)
+                        # using hash=True often raise CancelledError,
+                        # see dask/distributed#3703
+                        _coro = self.client.scatter(
+                            arg,
+                            asynchronous=True,
+                            hash=False
+                        )
+                        # Centralize the scattering of identical arguments
+                        # between concurrent apply_async callbacks by
+                        # exposing the running coroutine in
+                        # call_data_futures before it completes.
+                        t = asyncio.Task(_coro)
+                        call_data_futures[arg] = t
 
-                            f = await t
+                        f = await t
 
                 if f is not None:
                     out.append(f)

@@ -17,9 +17,7 @@ def hex_str(an_int):
 
 
 def asbytes(s):
-    if isinstance(s, bytes):
-        return s
-    return s.encode('latin1')
+    return s if isinstance(s, bytes) else s.encode('latin1')
 
 
 _MAX_LEN = len(hex_str(2 ** 64))

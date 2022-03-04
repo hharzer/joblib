@@ -104,20 +104,19 @@ def get_active_backend(prefer=None, require=None, verbose=0):
         backend, n_jobs = backend_and_jobs
         nesting_level = backend.nesting_level
         supports_sharedmem = getattr(backend, 'supports_sharedmem', False)
-        if require == 'sharedmem' and not supports_sharedmem:
-            # This backend does not match the shared memory constraint:
-            # fallback to the default thead-based backend.
-            sharedmem_backend = BACKENDS[DEFAULT_THREAD_BACKEND](
-                nesting_level=nesting_level)
-            if verbose >= 10:
-                print("Using %s as joblib.Parallel backend instead of %s "
-                      "as the latter does not provide shared memory semantics."
-                      % (sharedmem_backend.__class__.__name__,
-                         backend.__class__.__name__))
-            return sharedmem_backend, DEFAULT_N_JOBS
-        else:
+        if require != 'sharedmem' or supports_sharedmem:
             return backend_and_jobs
 
+        # This backend does not match the shared memory constraint:
+        # fallback to the default thead-based backend.
+        sharedmem_backend = BACKENDS[DEFAULT_THREAD_BACKEND](
+            nesting_level=nesting_level)
+        if verbose >= 10:
+            print("Using %s as joblib.Parallel backend instead of %s "
+                  "as the latter does not provide shared memory semantics."
+                  % (sharedmem_backend.__class__.__name__,
+                     backend.__class__.__name__))
+        return sharedmem_backend, DEFAULT_N_JOBS
     # We are outside of the scope of any parallel_backend context manager,
     # create the default backend instance now.
     backend = BACKENDS[DEFAULT_BACKEND](nesting_level=0)
@@ -750,7 +749,7 @@ class Parallel(Logger):
 
         self._backend = backend
         self._output = None
-        self._jobs = list()
+        self._jobs = []
         self._managed_backend = False
 
         # This lock is used coordinate the main thread of this process with
@@ -787,9 +786,7 @@ class Parallel(Logger):
         return n_jobs
 
     def _effective_n_jobs(self):
-        if self._backend:
-            return self._backend.effective_n_jobs(self.n_jobs)
-        return 1
+        return self._backend.effective_n_jobs(self.n_jobs) if self._backend else 1
 
     def _terminate_backend(self):
         if self._backend is not None:
@@ -868,7 +865,7 @@ class Parallel(Logger):
                 big_batch_size = batch_size * n_jobs
 
                 islice = list(itertools.islice(iterator, big_batch_size))
-                if len(islice) == 0:
+                if not islice:
                     return False
                 elif (iterator is self._original_iterator
                       and len(islice) < big_batch_size):
@@ -894,9 +891,8 @@ class Parallel(Logger):
             if len(tasks) == 0:
                 # No more tasks available in the iterator: tell caller to stop.
                 return False
-            else:
-                self._dispatch(tasks)
-                return True
+            self._dispatch(tasks)
+            return True
 
     def _print(self, msg, msg_args):
         """Display the message on stout or stderr depending on verbosity"""
@@ -904,10 +900,7 @@ class Parallel(Logger):
         # learn to use logger better.
         if not self.verbose:
             return
-        if self.verbose < 50:
-            writer = sys.stderr.write
-        else:
-            writer = sys.stdout.write
+        writer = sys.stderr.write if self.verbose < 50 else sys.stdout.write
         msg = msg % msg_args
         writer('[%s]: %s\n' % (self, msg))
 
@@ -924,18 +917,12 @@ class Parallel(Logger):
         # able to display an estimation of the remaining time based on already
         # completed jobs. Otherwise, we simply display the number of completed
         # tasks.
-        if self._original_iterator is not None:
-            if _verbosity_filter(self.n_dispatched_batches, self.verbose):
-                return
-            self._print('Done %3i tasks      | elapsed: %s',
-                        (self.n_completed_tasks,
-                         short_format_time(elapsed_time), ))
-        else:
+        if self._original_iterator is None:
             index = self.n_completed_tasks
             # We are finished dispatching
             total_tasks = self.n_dispatched_tasks
             # We always display the first loop
-            if not index == 0:
+            if index != 0:
                 # Display depending on the number of remaining items
                 # A message as soon as we finish dispatching, cursor is 0
                 cursor = (total_tasks - index + 1 -
@@ -954,8 +941,15 @@ class Parallel(Logger):
                          short_format_time(remaining_time),
                          ))
 
+        elif _verbosity_filter(self.n_dispatched_batches, self.verbose):
+            return
+        else:
+            self._print('Done %3i tasks      | elapsed: %s',
+                        (self.n_completed_tasks,
+                         short_format_time(elapsed_time), ))
+
     def retrieve(self):
-        self._output = list()
+        self._output = []
         while self._iterating or len(self._jobs) > 0:
             if len(self._jobs) == 0:
                 # Wait for an async callback to dispatch new jobs

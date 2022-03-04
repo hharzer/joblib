@@ -116,22 +116,20 @@ def get_command_line(pipe_handle, **kwds):
     '''
     if getattr(sys, 'frozen', False):
         return [sys.executable, '--multiprocessing-fork', pipe_handle]
-    else:
-        prog = 'from joblib.externals.loky.backend.popen_loky_win32 import main; main()'
-        opts = util._args_from_interpreter_flags()
-        return [spawn.get_executable(), *opts,
-                '-c', prog, '--multiprocessing-fork', pipe_handle]
+    prog = 'from joblib.externals.loky.backend.popen_loky_win32 import main; main()'
+    opts = util._args_from_interpreter_flags()
+    return [spawn.get_executable(), *opts,
+            '-c', prog, '--multiprocessing-fork', pipe_handle]
 
 
 def is_forking(argv):
     '''
     Return whether commandline indicates we are forking
     '''
-    if len(argv) >= 2 and argv[1] == '--multiprocessing-fork':
-        assert len(argv) == 3
-        return True
-    else:
+    if len(argv) < 2 or argv[1] != '--multiprocessing-fork':
         return False
+    assert len(argv) == 3
+    return True
 
 
 def main():
